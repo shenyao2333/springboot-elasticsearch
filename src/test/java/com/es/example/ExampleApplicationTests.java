@@ -136,6 +136,7 @@ class ExampleApplicationTests {
 
         searchRequest.source(sourceBuilder);
         SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+        System.out.println(searchResponse);
         ArrayList<Map<String, Object>> maps = new ArrayList<>();
         for (SearchHit hit: searchResponse.getHits().getHits()){
             Map<String, HighlightField> highlightFields = hit.getHighlightFields();

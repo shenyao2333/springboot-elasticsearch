@@ -3,8 +3,17 @@ package com.es.example.controller;
 import com.alibaba.fastjson.JSON;
 import com.es.example.dto.EmployeeRepository;
 import com.es.example.entity.Employee;
-import org.elasticsearch.index.query.MultiMatchQueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.text.Text;
+import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.index.query.*;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
+import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -12,6 +21,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author sy
@@ -24,7 +37,8 @@ public class TestController {
     @Resource
     private EmployeeRepository employeeRepository;
 
-
+    @Resource
+    private RestHighLevelClient client;
 
     @GetMapping("/add")
     public void add(){
@@ -104,12 +118,13 @@ public class TestController {
      * 使用构造器查询，过时了
      * @return
      */
-    @GetMapping("getList2")
+   /* @GetMapping("getList2")
     public Object testPageable(){
+
         MultiMatchQueryBuilder multiMatchQuery = QueryBuilders.multiMatchQuery("真的","firstName","lastName");
         Iterable<Employee> search = employeeRepository.search(multiMatchQuery,PageRequest.of(0,10));
         return search;
-    }
+    }*/
 
 
     /**
@@ -136,6 +151,49 @@ public class TestController {
         return byAgeBetween;
     }
 
+    @GetMapping("test")
+    public Object saf() throws IOException{
+        SearchRequest searchRequest = new SearchRequest("test_index");
+        // 构建搜索条件      
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        HighlightBuilder firstName = new HighlightBuilder().field("firstName");
+        firstName.preTags("<span class = 'df'>");
+        firstName.postTags("</span>");
+        sourceBuilder.highlighter(firstName);
 
+        sourceBuilder.from(0);
+        sourceBuilder.size(10);
+        MatchQueryBuilder matchQueryBuilder = QueryBuilders.matchQuery("firstName", "小明");
+
+        //MatchAllQueryBuilder matchAllQueryBuilder = QueryBuilders.matchAllQuery();MatchAllQueryBuilder matchAllQueryBuilder = QueryBuilders.matchAllQuery();
+
+        sourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
+        sourceBuilder.query(matchQueryBuilder);
+
+        searchRequest.source(sourceBuilder);
+
+
+
+        SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+        System.out.println(searchResponse);
+        ArrayList<Map<String, Object>> maps = new ArrayList<>();
+        for (SearchHit hit: searchResponse.getHits().getHits()){
+            Map<String, HighlightField> highlightFields = hit.getHighlightFields();
+            HighlightField title = highlightFields.get("firstName");
+            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+            if (title!=null){
+                String sb = "";
+                Text[] fragments = title.fragments();
+                for (Text s : fragments){
+                    sb+=s;
+                }
+                sourceAsMap.put("firstName",sb);
+            }
+
+            maps.add(sourceAsMap);
+        }
+        System.out.println(maps);
+        return maps;
+    }
 
 }
