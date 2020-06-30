@@ -3,6 +3,7 @@ package com.es.example.controller;
 import com.alibaba.fastjson.JSON;
 import com.es.example.dto.EmployeeRepository;
 import com.es.example.entity.Employee;
+import com.es.example.service.EsService;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RequestOptions;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
@@ -40,72 +42,49 @@ public class TestController {
     @Resource
     private RestHighLevelClient client;
 
+    @Resource
+    private EsService esService;
+
     @GetMapping("/add")
-    public void add(){
-        Employee employee = new Employee();
-        //employee.setId("1");
-        employee.setFirstName("沈瑶啊");
-        employee.setLastName("zh");
-        employee.setAge(26);
-        employee.setAbout("i am in peking");
-        Employee save = employeeRepository.save(employee);
-    }
-
-
-    @GetMapping("/addList")
-    public void get(){
-        Employee employee = new Employee();
-        employee.setId("1");
-        employee.setFirstName("沈瑶吗？");
-        employee.setLastName("zh");
-        employee.setAge(26);
-        employee.setAbout("i am in peking");
-        employeeRepository.save(employee);
-
-        employee = new Employee();
-        employee.setId("2");
-        employee.setFirstName("小明吗？");
-        employee.setLastName("小弟弟");
-        employee.setAge(20);
-        employee.setAbout("i am in peking");
-        employeeRepository.save(employee);
-    }
-
-
-    /**
-     * 删除
-     * @return
-     */
-    @GetMapping("delete")
-    public String delete() {
-        Employee employee = employeeRepository.queryEmployeeById("1");
-        employeeRepository.delete(employee);
+    public String add(){
+        esService.addData();
         return "success";
     }
 
+    @GetMapping("/addList")
+    public void get(){
+        esService.addListData();
+    }
 
+
+
+
+    /**
+     *  根据id删除
+     * @return
+     */
     @GetMapping("deleteById")
     public String deleteById(){
-        employeeRepository.deleteById("1");
+        employeeRepository.deleteById("ISxi9XIB9BoTM5NXy5UB");
         return "删除成功。";
     }
 
     /**
-     * 局部更新
+     * 局部更新，默认是根据id来更新的，如果没id的话就是增加了。
      * @return
      */
     @GetMapping("update")
     public String update() {
-        Employee employee = employeeRepository.queryEmployeeById("1");
+        Employee employee = new Employee();
         employee.setFirstName("哈哈");
+        employee.setLastName("zh");
         employeeRepository.save(employee);
-        System.err.println("update a obj");
         return "success";
     }
 
 
     /**
-     * 查询
+     * id查询
      * @return
      */
     @GetMapping("query")
@@ -135,9 +114,8 @@ public class TestController {
      * @return
      */
     @GetMapping("getList4")
-    public Object getList4(){
-        Page<Employee> employees = employeeRepository.findByFirstNameOrLastName("沈瑶","zh",PageRequest.of(0,10, Sort.Direction.DESC, "age"));
-        return employees;
+    public Page<Employee> getListByParam(String param){
+        return  esService.getListByParam(param);
     }
 
 
@@ -151,48 +129,63 @@ public class TestController {
         return byAgeBetween;
     }
 
+
+    /**
+     * 使用构建对象的方式查询数据
+     * @return
+     * @throws IOException
+     */
     @GetMapping("test")
     public Object saf() throws IOException{
         SearchRequest searchRequest = new SearchRequest("test_index");
-        // 构建搜索条件      
+        // SearchSourceBuilder 是构建搜索条件的盒子。
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+
+        //设置高亮的字段，也可以不设置。
         HighlightBuilder firstName = new HighlightBuilder().field("firstName");
         firstName.preTags("<span class = 'df'>");
         firstName.postTags("</span>");
         sourceBuilder.highlighter(firstName);
 
+        //设置分页。
         sourceBuilder.from(0);
         sourceBuilder.size(10);
+
+
+        /**
+         * 常用的查询方式有：
+         * .matchQuery() 这个是模糊查询
+         * .matchAllQuery() 查询全部
+         * .termQuery() 精确查询。
+         */
         MatchQueryBuilder matchQueryBuilder = QueryBuilders.matchQuery("firstName", "小明");
 
-        //MatchAllQueryBuilder matchAllQueryBuilder = QueryBuilders.matchAllQuery();MatchAllQueryBuilder matchAllQueryBuilder = QueryBuilders.matchAllQuery();
-
+        //设置响应超时时间
         sourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
-        sourceBuilder.query(matchQueryBuilder);
 
+        sourceBuilder.query(matchQueryBuilder);
         searchRequest.source(sourceBuilder);
 
 
-
         SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-        System.out.println(searchResponse);
+
+        //这个就是查询到的数据。
+        //searchResponse.getHits().getHits();
         ArrayList<Map<String, Object>> maps = new ArrayList<>();
         for (SearchHit hit: searchResponse.getHits().getHits()){
             Map<String, HighlightField> highlightFields = hit.getHighlightFields();
             HighlightField title = highlightFields.get("firstName");
             Map<String, Object> sourceAsMap = hit.getSourceAsMap();
             if (title!=null){
-                String sb = "";
+                StringBuffer sb = new StringBuffer();
                 Text[] fragments = title.fragments();
                 for (Text s : fragments){
-                    sb+=s;
+                    sb.append(s);
                 }
                 sourceAsMap.put("firstName",sb);
             }
-
             maps.add(sourceAsMap);
         }
-        System.out.println(maps);
         return maps;
     }
 

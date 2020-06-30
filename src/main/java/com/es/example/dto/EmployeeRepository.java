@@ -32,7 +32,7 @@ public interface EmployeeRepository extends ElasticsearchRepository<Employee,Str
 
 
     /**
-     * 根据范围
+     * 根据指定范围
      * @param age
      * @param age2
      * @return

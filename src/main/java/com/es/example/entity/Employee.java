@@ -15,7 +15,8 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
 public class Employee {
 
     /**
-     * index 是否创建索引，默认创建
+     * index 是否创建索引，默认创建。
+     * 在这里特别说明一下，对象必选要声明一个id，否则报错！
      */
     @Field(index = false,type = FieldType.Text)
     private String id;
